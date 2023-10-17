@@ -6,12 +6,11 @@
 #include <cstring>
 #include <string>
 #include <bitset>
+#include <limits>
 
 #include "Action.h"
 #include "Percept.h"
 #include "Orientation.h"
-
-int maxInRow(int* tableRow, int nColumns);
 
 class Agent
 {
@@ -20,6 +19,8 @@ private:
 	Percept previousPercept;
 	Percept currentPercept;
 
+	int numMoves;
+
 	int x, y;
 	Orientation orientation;
 
@@ -27,10 +28,12 @@ private:
 
 	char state[12];
 	int stateAsDecimal;
+	int previousStateAsDecimal;
 public:
 	Agent ();
 	~Agent ();
 	void Initialize ();
+	int observedReward ();
 	void updateOrientation ();
 	void updateLocation ();
 	void calculateState ();

@@ -10,7 +10,7 @@ using namespace std;
 double qTable[2048][6];
 
 // Probability of selecting a random action (epsilon-greedy policy)
-double epsilon = 0.5;
+double epsilon = 0.1;
 
 // Bellman equation parameters
 int learningRate = 1;
@@ -26,6 +26,36 @@ double maxInRow(double* tableRow, int nColumns)
 	return max;
 }
 
+int getMaxColumn(double* tableRow, int nColumns, double max)
+{
+	for (int i = 0; i < 6; i++)
+		if (tableRow[i] == max)
+			return i;
+	return 0;
+}
+
+double bellmanEquation(int state, Action action, int reward, int nextState)
+{
+	double nextMax = maxInRow(qTable[nextState], 6);
+	return qTable[state][static_cast<int>(action)] + learningRate * (reward + (discountFactor * nextMax) - qTable[state][static_cast<int>(action)]);
+}
+
+int Agent::observedReward ()
+{
+	// Killed the Wumpus
+	if (currentPercept.Scream)
+		return 10;
+	// Grabbed the gold
+	else if (previousAction == GRAB && previousPercept.Glitter)
+		return 100;
+	// Ran into a wall
+	if (previousAction == CLIMB || previousAction == SHOOT || previousAction == GRAB || currentPercept.Bump)
+		return -100;
+	// Moved to a different space or changed orientation
+	else
+		return -1;
+}
+
 Agent::Agent ()
 {
 	// Initialize Q-table cells to 0s
@@ -39,8 +69,9 @@ Agent::~Agent ()
 
 void Agent::Initialize ()
 {
+	numMoves = 0;
 	carryingGold = false;
-	state[11] = '\0'; 
+	state[11] = '\0';
 	previousAction = CLIMB;
 	x = 0;
 	y = 0;
@@ -99,6 +130,7 @@ void Agent::calculateState ()
 Action Agent::Process (Percept& percept)
 {
 	int epsilonGreedy;
+	int reward;
 	Action action;
 	currentPercept = percept;
 
@@ -108,10 +140,11 @@ Action Agent::Process (Percept& percept)
 		updateOrientation();
 	else if (previousAction == GRAB && previousPercept.Glitter == true)
 		carryingGold = true;
-	
-	cout << "At (" << x << ", " << y << ") facing "; PrintOrientation(orientation); cout << endl;
 	calculateState();
-	cout << "State: " << state << " (" << stateAsDecimal << ")" << endl;
+
+	reward = observedReward();
+	if (previousAction != CLIMB)
+		qTable[previousStateAsDecimal][static_cast<int>(previousAction)] = bellmanEquation(previousStateAsDecimal, previousAction, reward, stateAsDecimal);
 
 	/* Generate random number between 1 and 100 */
 	epsilonGreedy = rand() % 100 + 1;
@@ -120,22 +153,26 @@ Action Agent::Process (Percept& percept)
 		action = static_cast<Action>(rand() % 6);
 	/* Otherwise select the action based on the Q-table */
 	else {
-		double maxQ = maxInRow(qTable[stateAsDecimal], 6); 
-		for (int i = 0; i < 6; i++)
-			if (qTable[stateAsDecimal][i] == maxQ) {
-				action = static_cast<Action>(i);
-				break;
-			}
+		double maxQ = maxInRow(qTable[stateAsDecimal], 6);
+		action = static_cast<Action>(getMaxColumn(qTable[stateAsDecimal], 6, maxQ));
 	}
 
+	previousStateAsDecimal = stateAsDecimal;
 	previousAction = action;
 	previousPercept = percept;
 
+	numMoves++;
 	return action;
 }
 
 void Agent::GameOver (int score)
 {
-
+	int reward;
+	// Escaped with the gold
+	if (previousAction == CLIMB && carryingGold)
+		qTable[stateAsDecimal][static_cast<int>(previousAction)] = 100000;
+	// Escaped without gold, fell into a pit or died to the Wumpus
+	else if (numMoves < 1000)
+		qTable[stateAsDecimal][static_cast<int>(previousAction)] = -100000;
 }
 
