@@ -6,9 +6,30 @@
 
 using namespace std;
 
+// Create the Q-table
+double qTable[2048][6];
+
+// Probability of selecting a random action (epsilon-greedy policy)
+double epsilon = 0.5;
+
+// Bellman equation parameters
+int learningRate = 1;
+int discountFactor = 1;
+
+double maxInRow(double* tableRow, int nColumns)
+{
+	double max = 0;
+	for (int i = 0; i < nColumns; i++) {
+		if (tableRow[i] > max)
+			max = tableRow[i];
+	}
+	return max;
+}
+
 Agent::Agent ()
 {
-
+	// Initialize Q-table cells to 0s
+	memset(qTable, 0, sizeof(qTable));
 }
 
 Agent::~Agent ()
@@ -18,19 +39,20 @@ Agent::~Agent ()
 
 void Agent::Initialize ()
 {
+	carryingGold = false;
 	state[11] = '\0'; 
-	prevAction = CLIMB;
+	previousAction = CLIMB;
 	x = 0;
 	y = 0;
 	orientation = RIGHT;
 }
 
-void Agent::updateOrientation (Action action)
+void Agent::updateOrientation ()
 {
-	if (action == TURNLEFT)
-		orientation = (orientation == 3) ? 0:orientation + 1;
-	else if (action == TURNRIGHT)
-		orientation = (orientation == 0) ? 3:orientation - 1; 
+	if (previousAction == TURNLEFT)
+		orientation = (orientation == DOWN) ? RIGHT:static_cast<Orientation>(static_cast<int>(orientation) + 1);
+	else if (previousAction == TURNRIGHT)
+		orientation = (orientation == RIGHT) ? DOWN:static_cast<Orientation>(static_cast<int>(orientation) - 1); 
 }
 
 void Agent::updateLocation ()
@@ -45,11 +67,11 @@ void Agent::updateLocation ()
 		y -= 1;
 }
 
-void Agent::calculateState (bool stench, bool breeze, bool glitter)
+void Agent::calculateState ()
 {
-	state[0] = stench ? '1':'0';
-	state[1] = breeze ? '1':'0';
-	state[2] = glitter ? '1':'0';
+	state[0] = currentPercept.Stench ? '1':'0';
+	state[1] = currentPercept.Breeze ? '1':'0';
+	state[2] = carryingGold ? '1':'0';
 	
 	bitset<3> xBitset(x);
 	string xString = xBitset.to_string();
@@ -65,7 +87,7 @@ void Agent::calculateState (bool stench, bool breeze, bool glitter)
 	state[7] = yArray[1];
 	state[8] = yArray[2];
 
-	bitset<2> orientationBitset(orientation);
+	bitset<2> orientationBitset(static_cast<int>(orientation));
 	string orientationString = orientationBitset.to_string();
 	const char* orientationArray = orientationString.c_str();
 	state[9] = orientationArray[0];
@@ -76,41 +98,38 @@ void Agent::calculateState (bool stench, bool breeze, bool glitter)
 
 Action Agent::Process (Percept& percept)
 {
-	char c;
+	int epsilonGreedy;
 	Action action;
-	bool validAction = false;
+	currentPercept = percept;
 
-	if (prevAction == GOFORWARD && ! percept.Bump)
+	if (previousAction == GOFORWARD && ! currentPercept.Bump)
 		updateLocation();
-	cout << "At (" << x << ", " << y << ") facing " << orientationToString[orientation] << endl;
-	calculateState(percept.Stench, percept.Breeze, percept.Glitter);
+	else if (previousAction == TURNLEFT || previousAction == TURNRIGHT)
+		updateOrientation();
+	else if (previousAction == GRAB && previousPercept.Glitter == true)
+		carryingGold = true;
+	
+	cout << "At (" << x << ", " << y << ") facing "; PrintOrientation(orientation); cout << endl;
+	calculateState();
 	cout << "State: " << state << " (" << stateAsDecimal << ")" << endl;
 
-	while (! validAction)
-	{
-		validAction = true;
-		cout << "Action? ";
-		cin >> c;
-		if (c == 'f') {
-			action = GOFORWARD;
-		} else if (c == 'l') {
-			action = TURNLEFT;
-			updateOrientation(action);
-		} else if (c == 'r') {
-			action = TURNRIGHT;
-			updateOrientation(action);
-		} else if (c == 'g') {
-			action = GRAB;
-		} else if (c == 's') {
-			action = SHOOT;
-		} else if (c == 'c') {
-			action = CLIMB;
-		} else {
-			cout << "Huh?" << endl;
-			validAction = false;
-		}
+	/* Generate random number between 1 and 100 */
+	epsilonGreedy = rand() % 100 + 1;
+	/* If the value is less than epsilon select a random action */
+	if (epsilonGreedy <= epsilon * 100)
+		action = static_cast<Action>(rand() % 6);
+	/* Otherwise select the action based on the Q-table */
+	else {
+		double maxQ = maxInRow(qTable[stateAsDecimal], 6); 
+		for (int i = 0; i < 6; i++)
+			if (qTable[stateAsDecimal][i] == maxQ) {
+				action = static_cast<Action>(i);
+				break;
+			}
 	}
-	prevAction = action;
+
+	previousAction = action;
+	previousPercept = percept;
 
 	return action;
 }

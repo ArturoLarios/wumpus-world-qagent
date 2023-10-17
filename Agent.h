@@ -3,6 +3,7 @@
 #ifndef AGENT_H
 #define AGENT_H
 
+#include <cstring>
 #include <string>
 #include <bitset>
 
@@ -10,21 +11,29 @@
 #include "Percept.h"
 #include "Orientation.h"
 
+int maxInRow(int* tableRow, int nColumns);
+
 class Agent
 {
 private:
+	Action previousAction;
+	Percept previousPercept;
+	Percept currentPercept;
+
+	int x, y;
+	Orientation orientation;
+
+	bool carryingGold;
+
 	char state[12];
 	int stateAsDecimal;
-	Action prevAction;
-	string orientationToString[4]  = {"RIGHT", "UP", "LEFT", "DOWN"};
-	int x, y, orientation;
 public:
 	Agent ();
 	~Agent ();
 	void Initialize ();
-	void updateOrientation (Action action);
+	void updateOrientation ();
 	void updateLocation ();
-	void calculateState (bool stench, bool breeze, bool glitter);
+	void calculateState ();
 	Action Process (Percept& percept);
 	void GameOver (int score);
 };
