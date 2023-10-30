@@ -1,8 +1,6 @@
 // Agent.cc
 
-#include <iostream>
 #include "Agent.h"
-#include "WumpusWorld.h"
 
 using namespace std;
 
@@ -15,6 +13,53 @@ double epsilon = 0.1;
 // Bellman equation parameters
 int learningRate = 1;
 int discountFactor = 1;
+
+bool Agent::loadModel ()
+{
+	// Open the model file for reading
+    ifstream modelFile("model.txt");
+    if (!modelFile) {
+        cerr << "An error occured while attempting to load the model (couldn't open file)." << endl;
+        return false; // Exit with error code
+    }
+
+	// Iterate through the Q-Table and write the data from the file
+    for (int i = 0; i < 2048; i++) {
+        for (int j = 0; j < 6; j++) {
+            if (!(modelFile >> qTable[i][j])) {
+                cerr << "An error occured while attempting to load the model (invalid file)." << endl;
+                return false; // Exit with error code
+            }
+        }
+    }
+	// Close the model's file
+    modelFile.close();
+	
+	return true;
+}
+
+bool Agent::saveModel ()
+{
+    // Open the model file for writing
+    ofstream modelFile("model.txt");
+    if (!modelFile) {
+        cerr << "An error occurred while attempting to save the model (couldn't open file)." << endl;
+        return false; // Exit with error code
+    }
+
+    // Iterate through the Q-Table and write the data to the file
+    for (int i = 0; i < 2048; i++) {
+        for (int j = 0; j < 6; j++) {
+            modelFile << qTable[i][j] << " ";
+        }
+        modelFile << endl; // Add a newline after each row
+    }
+
+    // Close the model file
+    modelFile.close();
+
+	return true;
+}
 
 double maxInRow(double* tableRow, int nColumns)
 {
@@ -58,13 +103,14 @@ int Agent::observedReward ()
 
 Agent::Agent ()
 {
-	// Initialize Q-table cells to 0s
-	memset(qTable, 0, sizeof(qTable));
+	// If a model can't be loaded initialize the Q-table cells to 0s
+	if (!loadModel())
+		memset(qTable, 0, sizeof(qTable));
 }
 
 Agent::~Agent ()
 {
-
+	saveModel();
 }
 
 void Agent::Initialize ()

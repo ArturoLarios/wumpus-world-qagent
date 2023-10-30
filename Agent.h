@@ -7,6 +7,8 @@
 #include <string>
 #include <bitset>
 #include <limits>
+#include <fstream>
+#include <iostream>
 
 #include "Action.h"
 #include "Percept.h"
@@ -32,6 +34,8 @@ private:
 public:
 	Agent ();
 	~Agent ();
+	bool loadModel ();
+	bool saveModel ();
 	void Initialize ();
 	int observedReward ();
 	void updateOrientation ();
