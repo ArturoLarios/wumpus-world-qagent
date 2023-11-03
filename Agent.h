@@ -3,12 +3,15 @@
 #ifndef AGENT_H
 #define AGENT_H
 
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <bitset>
 #include <limits>
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
+#include <array>
 
 #include "Action.h"
 #include "Percept.h"
@@ -26,6 +29,7 @@ private:
 	int x, y;
 	Orientation orientation;
 
+	bool wumpusIsDead;
 	bool carryingGold;
 
 	char state[12];
@@ -35,11 +39,11 @@ public:
 	Agent ();
 	~Agent ();
 	bool loadModel ();
-	bool saveModel ();
+	void saveModel ();
 	void Initialize ();
 	int observedReward ();
-	void updateOrientation ();
 	void updateLocation ();
+	void updateOrientation ();
 	void calculateState ();
 	Action Process (Percept& percept);
 	void GameOver (int score);

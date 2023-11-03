@@ -4,85 +4,113 @@
 
 using namespace std;
 
-// Create the Q-table
-double qTable[2048][6];
+// Create the Q-Table as an unordered_map where each key (state) maps to an array of integers (Q-Values for the action set).
+unordered_map<int, array<double, 6>> qTable;
 
 // Probability of selecting a random action (epsilon-greedy policy)
-double epsilon = 0.1;
+double epsilon = 0.5;
 
 // Bellman equation parameters
 int learningRate = 1;
 int discountFactor = 1;
 
-bool Agent::loadModel ()
-{
-	// Open the model file for reading
-    ifstream modelFile("model.txt");
-    if (!modelFile) {
-        cerr << "An error occured while attempting to load the model (couldn't open file)." << endl;
-        return false; // Exit with error code
+void Agent::saveModel() {
+    // Get the file name from an environment variable
+    const char* modelFileName = getenv("WW_SAVE_MODEL");
+
+    if (modelFileName == nullptr) {
+        cerr << "Set the WW_SAVE_MODEL environment variable to save the trained model to a file." << endl;
+        return;
     }
 
-	// Iterate through the Q-Table and write the data from the file
-    for (int i = 0; i < 2048; i++) {
-        for (int j = 0; j < 6; j++) {
-            if (!(modelFile >> qTable[i][j])) {
-                cerr << "An error occured while attempting to load the model (invalid file)." << endl;
-                return false; // Exit with error code
-            }
-        }
-    }
-	// Close the model's file
-    modelFile.close();
-	
-	return true;
-}
-
-bool Agent::saveModel ()
-{
     // Open the model file for writing
-    ofstream modelFile("model.txt");
+    ofstream modelFile(modelFileName);
     if (!modelFile) {
         cerr << "An error occurred while attempting to save the model (couldn't open file)." << endl;
-        return false; // Exit with error code
+        return;
     }
 
-    // Iterate through the Q-Table and write the data to the file
-    for (int i = 0; i < 2048; i++) {
-        for (int j = 0; j < 6; j++) {
-            modelFile << qTable[i][j] << " ";
+    // Iterate through the qTable and write the data to the file
+    for (const auto& entry : qTable) {
+        int key = entry.first;
+        const array<double, 6>& values = entry.second;
+
+        modelFile << key << " "; // Write the key
+
+        for (double value : values) {
+            modelFile << value << " "; // Write the values
         }
         modelFile << endl; // Add a newline after each row
     }
 
     // Close the model file
     modelFile.close();
-
-	return true;
 }
 
-double maxInRow(double* tableRow, int nColumns)
+bool Agent::loadModel() {
+    // Get the file name from an environment variable
+    const char* modelFileName = getenv("WW_LOAD_MODEL");
+
+    if (modelFileName == nullptr) {
+        cerr << "Set the WW_LOAD_MODEL environment variable to load a model from a file." << endl;
+        return false;
+    }
+
+    // Open the model file for reading
+    ifstream modelFile(modelFileName);
+    if (!modelFile) {
+        cerr << "An error occurred while attempting to load the model (couldn't open file: " << modelFileName << ")." << endl;
+        return false; // Exit with an error code
+    }
+
+    // Clear the existing qTable
+    qTable.clear();
+
+    // Read data from the file and populate the qTable
+    int key;
+    array<double, 6> values;
+
+    while (modelFile >> key) {
+        for (double& value : values) {
+            if (!(modelFile >> value)) {
+                cerr << "Error reading values from the file." << endl;
+                return false; // Exit with an error code
+            }
+        }
+        qTable[key] = values;
+    }
+
+    // Check for end-of-file
+    if (!modelFile.eof()) {
+        cerr << "Error reading the entire file." << endl;
+        return false; // Exit with an error code
+    }
+
+    // Close the model file
+    modelFile.close();
+
+    return true;
+}
+
+int maxQIndex(int state)
 {
 	double max = 0;
-	for (int i = 0; i < nColumns; i++) {
-		if (tableRow[i] > max)
-			max = tableRow[i];
-	}
-	return max;
-}
+	int indexOfMax = 0;
 
-int getMaxColumn(double* tableRow, int nColumns, double max)
-{
-	for (int i = 0; i < 6; i++)
-		if (tableRow[i] == max)
-			return i;
-	return 0;
+	for (int i = 0; i < 6; i++) {
+		if (qTable[state][i] > max) {
+			max = qTable[state][i];
+			indexOfMax = i;
+		}
+	}
+
+	return indexOfMax;
 }
 
 double bellmanEquation(int state, Action action, int reward, int nextState)
 {
-	double nextMax = maxInRow(qTable[nextState], 6);
-	return qTable[state][static_cast<int>(action)] + learningRate * (reward + (discountFactor * nextMax) - qTable[state][static_cast<int>(action)]);
+	double nextStateMaxQ = qTable[nextState][maxQIndex(nextState)];
+	return qTable[state][static_cast<int>(action)] + learningRate * (reward + (discountFactor * nextStateMaxQ) - qTable[state][static_cast<int>(action)]);
 }
 
 int Agent::observedReward ()
@@ -93,7 +121,7 @@ int Agent::observedReward ()
 	// Grabbed the gold
 	else if (previousAction == GRAB && previousPercept.Glitter)
 		return 100;
-	// Ran into a wall
+	// Tried to climb not at the entrance, wasted arrow, tried to grab nothing, or ran into a wall
 	if (previousAction == CLIMB || previousAction == SHOOT || previousAction == GRAB || currentPercept.Bump)
 		return -100;
 	// Moved to a different space or changed orientation
@@ -103,9 +131,17 @@ int Agent::observedReward ()
 
 Agent::Agent ()
 {
-	// If a model can't be loaded initialize the Q-table cells to 0s
+    // Get the file name from an environment variable
+    const char* trainingMode = getenv("WW_TRAINING_MODE");
+
+    if (trainingMode == nullptr)
+        cerr << "Set the WW_TRAINING_MODE environment variable to enable training mode." << endl;
+    else
+		epsilon = 0;
+
+	// If an error occurs while loading the model, clear whatever was loaded
 	if (!loadModel())
-		memset(qTable, 0, sizeof(qTable));
+		qTable.clear();
 }
 
 Agent::~Agent ()
@@ -116,20 +152,13 @@ Agent::~Agent ()
 void Agent::Initialize ()
 {
 	numMoves = 0;
+	wumpusIsDead = false;
 	carryingGold = false;
 	state[11] = '\0';
 	previousAction = CLIMB;
 	x = 0;
 	y = 0;
 	orientation = RIGHT;
-}
-
-void Agent::updateOrientation ()
-{
-	if (previousAction == TURNLEFT)
-		orientation = (orientation == DOWN) ? RIGHT:static_cast<Orientation>(static_cast<int>(orientation) + 1);
-	else if (previousAction == TURNRIGHT)
-		orientation = (orientation == RIGHT) ? DOWN:static_cast<Orientation>(static_cast<int>(orientation) - 1); 
 }
 
 void Agent::updateLocation ()
@@ -142,6 +171,14 @@ void Agent::updateLocation ()
 		x -= 1;
 	else if (orientation == DOWN)
 		y -= 1;
+}
+
+void Agent::updateOrientation ()
+{
+	if (previousAction == TURNLEFT)
+		orientation = (orientation == DOWN) ? RIGHT:static_cast<Orientation>(static_cast<int>(orientation) + 1);
+	else if (previousAction == TURNRIGHT)
+		orientation = (orientation == RIGHT) ? DOWN:static_cast<Orientation>(static_cast<int>(orientation) - 1); 
 }
 
 void Agent::calculateState ()
@@ -180,13 +217,22 @@ Action Agent::Process (Percept& percept)
 	Action action;
 	currentPercept = percept;
 
-	if (previousAction == GOFORWARD && ! currentPercept.Bump)
+	if (previousAction == SHOOT && currentPercept.Scream)
+		wumpusIsDead = true;
+	else if (previousAction == GOFORWARD && ! currentPercept.Bump)
 		updateLocation();
 	else if (previousAction == TURNLEFT || previousAction == TURNRIGHT)
 		updateOrientation();
 	else if (previousAction == GRAB && previousPercept.Glitter == true)
 		carryingGold = true;
+	if (wumpusIsDead)
+		currentPercept.Stench = false;
+
 	calculateState();
+
+	// If the state has not been seen before, add it to the qTable
+	if (! qTable.count(stateAsDecimal))
+		qTable[stateAsDecimal] = {0, 0, 0, 0, 0, 0};
 
 	reward = observedReward();
 	if (previousAction != CLIMB)
@@ -198,10 +244,8 @@ Action Agent::Process (Percept& percept)
 	if (epsilonGreedy <= epsilon * 100)
 		action = static_cast<Action>(rand() % 6);
 	/* Otherwise select the action based on the Q-table */
-	else {
-		double maxQ = maxInRow(qTable[stateAsDecimal], 6);
-		action = static_cast<Action>(getMaxColumn(qTable[stateAsDecimal], 6, maxQ));
-	}
+	else
+		action = static_cast<Action>(maxQIndex(stateAsDecimal));
 
 	previousStateAsDecimal = stateAsDecimal;
 	previousAction = action;
@@ -213,7 +257,6 @@ Action Agent::Process (Percept& percept)
 
 void Agent::GameOver (int score)
 {
-	int reward;
 	// Escaped with the gold
 	if (previousAction == CLIMB && carryingGold)
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = 100000;
