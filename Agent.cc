@@ -8,7 +8,8 @@ using namespace std;
 unordered_map<int, array<double, 6>> qTable;
 
 // Probability of selecting a random action (epsilon-greedy policy)
-double epsilon = 0.5;
+// Different probabilities can be set for the agent while looking for the gold and while carrying it
+double epsilonFindingGold = 0.5, epsilonCarryingGold = 0.5;
 
 // Bellman equation parameters
 int learningRate = 1;
@@ -119,8 +120,11 @@ int Agent::observedReward ()
 	if (currentPercept.Scream)
 		return 10;
 	// Grabbed the gold
-	else if (previousAction == GRAB && previousPercept.Glitter)
+	else if (previousAction == GRAB && previousPercept.Glitter) {
+		if (epsilonFindingGold > 0)
+			epsilonFindingGold -= 0.01;
 		return 100;
+	}
 	// Tried to climb not at the entrance, wasted arrow, tried to grab nothing, or ran into a wall
 	if (previousAction == CLIMB || previousAction == SHOOT || previousAction == GRAB || currentPercept.Bump)
 		return -100;
@@ -135,9 +139,11 @@ Agent::Agent ()
     const char* trainingMode = getenv("WW_TRAINING_MODE");
 
     if (trainingMode == nullptr)
-        cerr << "Set the WW_TRAINING_MODE environment variable to enable training mode." << endl;
-    else
-		epsilon = 0;
+        cerr << "Set the WW_TRAINING_MODE environment variable to disable training mode." << endl;
+    else {
+		epsilonFindingGold = 0;
+		epsilonCarryingGold = 0;
+	}
 
 	// If an error occurs while loading the model, clear whatever was loaded
 	if (!loadModel())
@@ -238,6 +244,10 @@ Action Agent::Process (Percept& percept)
 
 	/* Generate random number between 1 and 100 */
 	epsilonGreedy = rand() % 100 + 1;
+	// Select epsilon based on if the agent is finding or carrying the gold
+	double epsilon = epsilonFindingGold;
+	if (carryingGold)
+		epsilon = epsilonCarryingGold;
 	/* If the value is less than epsilon select a random action */
 	if (epsilonGreedy <= epsilon * 100)
 		action = static_cast<Action>(rand() % 6);
@@ -256,8 +266,11 @@ Action Agent::Process (Percept& percept)
 void Agent::GameOver (int score)
 {
 	// Escaped with the gold
-	if (previousAction == CLIMB && carryingGold)
+	if (previousAction == CLIMB && carryingGold) {
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = 100000;
+		if (epsilonCarryingGold > 0)
+			epsilonCarryingGold -= 0.01;
+	}
 	// Escaped without gold, fell into a pit or died to the Wumpus
 	else if (numMoves < 1000)
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = -100000;
