@@ -154,7 +154,7 @@ void Agent::Initialize ()
 	numMoves = 0;
 	wumpusIsDead = false;
 	carryingGold = false;
-	state[11] = '\0';
+	state[9] = '\0';
 	previousAction = CLIMB;
 	x = 0;
 	y = 0;
@@ -183,29 +183,27 @@ void Agent::updateOrientation ()
 
 void Agent::calculateState ()
 {
-	state[0] = currentPercept.Stench ? '1':'0';
-	state[1] = currentPercept.Breeze ? '1':'0';
-	state[2] = carryingGold ? '1':'0';
+	state[0] = carryingGold ? '1':'0';
 	
 	bitset<3> xBitset(x);
 	string xString = xBitset.to_string();
 	const char* xArray = xString.c_str();
-	state[3] = xArray[0];
-	state[4] = xArray[1];
-	state[5] = xArray[2];
+	state[1] = xArray[0];
+	state[2] = xArray[1];
+	state[3] = xArray[2];
 
 	bitset<3> yBitset(y);
 	string yString = yBitset.to_string();
 	const char* yArray = yString.c_str();
-	state[6] = yArray[0];
-	state[7] = yArray[1];
-	state[8] = yArray[2];
+	state[4] = yArray[0];
+	state[5] = yArray[1];
+	state[6] = yArray[2];
 
 	bitset<2> orientationBitset(static_cast<int>(orientation));
 	string orientationString = orientationBitset.to_string();
 	const char* orientationArray = orientationString.c_str();
-	state[9] = orientationArray[0];
-	state[10] = orientationArray[1];
+	state[7] = orientationArray[0];
+	state[8] = orientationArray[1];
 
 	stateAsDecimal = bitset<32>(state).to_ulong();
 }
@@ -264,4 +262,3 @@ void Agent::GameOver (int score)
 	else if (numMoves < 1000)
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = -100000;
 }
-

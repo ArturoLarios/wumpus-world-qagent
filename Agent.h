@@ -32,7 +32,7 @@ private:
 	bool wumpusIsDead;
 	bool carryingGold;
 
-	char state[12];
+	char state[10];
 	int stateAsDecimal;
 	int previousStateAsDecimal;
 public:
