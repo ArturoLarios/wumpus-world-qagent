@@ -9,11 +9,20 @@ unordered_map<int, array<double, 6>> qTable;
 
 // Probability of selecting a random action (epsilon-greedy policy)
 // Different probabilities can be set for the agent while looking for the gold and while carrying it
-double epsilonFindingGold = 0.5, epsilonCarryingGold = 0.5;
+int epsilonFindingGold = 50, epsilonCarryingGold = 50;
 
 // Bellman equation parameters
 int learningRate = 1;
 int discountFactor = 1;
+
+// Number of episodes completed
+int episodeCount = 0;
+
+// Episode number when finding gold finished training
+int findingGoldEpisodeCount = 0;
+
+// Episode number when carrying gold finished training
+int carryingGoldEpisodeCount = 0;
 
 void Agent::saveModel() {
     // Get the file name from an environment variable
@@ -93,6 +102,7 @@ bool Agent::loadModel() {
     return true;
 }
 
+// Return the index of the action with the highest Q-value for a given state
 int maxQIndex(int state)
 {
 	double max = 0;
@@ -108,12 +118,14 @@ int maxQIndex(int state)
 	return indexOfMax;
 }
 
+// Return the updated Q-value for a  state-action pair given the observed reward and next state
 double bellmanEquation(int state, Action action, int reward, int nextState)
 {
 	double nextStateMaxQ = qTable[nextState][maxQIndex(nextState)];
 	return qTable[state][static_cast<int>(action)] + learningRate * (reward + (discountFactor * nextStateMaxQ) - qTable[state][static_cast<int>(action)]);
 }
 
+// Calculate the observed reward for the previous state-action pair
 int Agent::observedReward ()
 {
 	// Killed the Wumpus
@@ -121,9 +133,13 @@ int Agent::observedReward ()
 		return 10;
 	// Grabbed the gold
 	else if (previousAction == GRAB && previousPercept.Glitter) {
+		// Decrease epsilon by 1% every time the agent successfully exits with the gold
 		if (epsilonFindingGold > 0)
-			epsilonFindingGold -= 0.01;
-		return 100;
+			epsilonFindingGold -= 1;
+		// Log the number of episodes it took for epsilon to reach 0%
+		if (epsilonFindingGold == 0 && findingGoldEpisodeCount == 0)
+			findingGoldEpisodeCount = episodeCount;
+		return 10000;
 	}
 	// Tried to climb not at the entrance, wasted arrow, tried to grab nothing, or ran into a wall
 	if (previousAction == CLIMB || previousAction == SHOOT || previousAction == GRAB || currentPercept.Bump)
@@ -133,11 +149,13 @@ int Agent::observedReward ()
 		return -1;
 }
 
+// Agent constructor
 Agent::Agent ()
 {
-    // Get the file name from an environment variable
+    // Get the training mode environment variable
     const char* trainingMode = getenv("WW_TRAINING_MODE");
 
+	// If it's set the agent applies a greedy policy (default = epsilon-greedy policy)
     if (trainingMode == nullptr)
         cerr << "Set the WW_TRAINING_MODE environment variable to disable training mode." << endl;
     else {
@@ -150,13 +168,20 @@ Agent::Agent ()
 		qTable.clear();
 }
 
+// Agent destructor
 Agent::~Agent ()
 {
 	saveModel();
 }
 
+// Values initialized each time the agent tries a world
 void Agent::Initialize ()
 {
+	if (carryingGoldEpisodeCount) {
+		cout << "Finished gold finding training in " << findingGoldEpisodeCount << " episodes." << endl;
+		cout << "Finished gold carrying training in " << carryingGoldEpisodeCount << " episodes." << endl;
+		exit(0);
+	}
 	numMoves = 0;
 	wumpusIsDead = false;
 	carryingGold = false;
@@ -167,6 +192,7 @@ void Agent::Initialize ()
 	orientation = RIGHT;
 }
 
+// Update the agent's knowledge of its location (x, y) based on the direction it faced before moving
 void Agent::updateLocation ()
 {
 	if (orientation == RIGHT)
@@ -179,6 +205,7 @@ void Agent::updateLocation ()
 		y -= 1;
 }
 
+// Update the agent's orientation based on the direction it faced and if it turned left or right
 void Agent::updateOrientation ()
 {
 	if (previousAction == TURNLEFT)
@@ -187,10 +214,13 @@ void Agent::updateOrientation ()
 		orientation = (orientation == RIGHT) ? DOWN:static_cast<Orientation>(static_cast<int>(orientation) - 1); 
 }
 
+// Calculate the environment state as a binary string, and convert it to a decimal value
 void Agent::calculateState ()
 {
+	// Set the leftmost bit based on if the agent is carrying the gold
 	state[0] = carryingGold ? '1':'0';
 	
+	// Set the next 3 bits to the agent's x-coordinate converted to binary
 	bitset<3> xBitset(x);
 	string xString = xBitset.to_string();
 	const char* xArray = xString.c_str();
@@ -198,6 +228,7 @@ void Agent::calculateState ()
 	state[2] = xArray[1];
 	state[3] = xArray[2];
 
+	// Set the next 3 bits to the agent's y-coordinate converted to binary
 	bitset<3> yBitset(y);
 	string yString = yBitset.to_string();
 	const char* yArray = yString.c_str();
@@ -205,15 +236,19 @@ void Agent::calculateState ()
 	state[5] = yArray[1];
 	state[6] = yArray[2];
 
+	// Set the last 2 bits to the agent's orientation converted to binary 
+	// Based on the enumeration in Orientation.h
 	bitset<2> orientationBitset(static_cast<int>(orientation));
 	string orientationString = orientationBitset.to_string();
 	const char* orientationArray = orientationString.c_str();
 	state[7] = orientationArray[0];
 	state[8] = orientationArray[1];
 
+	// Convert the bitset to an unsigned integer
 	stateAsDecimal = bitset<32>(state).to_ulong();
 }
 
+// Main agent loop called each time the environment updates
 Action Agent::Process (Percept& percept)
 {
 	int epsilonGreedy;
@@ -245,11 +280,11 @@ Action Agent::Process (Percept& percept)
 	/* Generate random number between 1 and 100 */
 	epsilonGreedy = rand() % 100 + 1;
 	// Select epsilon based on if the agent is finding or carrying the gold
-	double epsilon = epsilonFindingGold;
+	int epsilon = epsilonFindingGold;
 	if (carryingGold)
 		epsilon = epsilonCarryingGold;
 	/* If the value is less than epsilon select a random action */
-	if (epsilonGreedy <= epsilon * 100)
+	if (epsilonGreedy <= epsilon)
 		action = static_cast<Action>(rand() % 6);
 	/* Otherwise select the action based on the Q-table */
 	else
@@ -263,15 +298,22 @@ Action Agent::Process (Percept& percept)
 	return action;
 }
 
+// Calculate rewards based on game over condition and update the Q-table
 void Agent::GameOver (int score)
 {
+	episodeCount++;
 	// Escaped with the gold
 	if (previousAction == CLIMB && carryingGold) {
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = 100000;
+		// Decrease epsilon by 1% every time the agent successfully exits with the gold
 		if (epsilonCarryingGold > 0)
-			epsilonCarryingGold -= 0.01;
+			epsilonCarryingGold -= 1;
+		// Log the number of episodes it took for epsilon to reach 0%
+		if (epsilonCarryingGold == 0 && carryingGoldEpisodeCount == 0)
+			carryingGoldEpisodeCount = episodeCount;
 	}
 	// Escaped without gold, fell into a pit or died to the Wumpus
 	else if (numMoves < 1000)
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = -100000;
+	cout << epsilonCarryingGold << " " <<  epsilonFindingGold << endl;
 }
