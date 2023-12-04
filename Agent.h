@@ -17,6 +17,8 @@
 #include "Percept.h"
 #include "Orientation.h"
 
+using namespace std;
+
 class Agent
 {
 private:
@@ -38,8 +40,8 @@ private:
 public:
 	Agent ();
 	~Agent ();
-	bool loadModel ();
-	void saveModel ();
+	bool loadModel (string loadFile);
+	void saveModel (string saveFile);
 	void Initialize ();
 	int observedReward ();
 	void updateLocation ();

@@ -2,18 +2,22 @@
 
 #include "Agent.h"
 
-using namespace std;
-
-// Create the Q-Table as an unordered_map where each key (state) maps to an array of integers (Q-Values for the action set).
+// Create the Q-Table as an unordered_map (dictionary) where each key (state) maps to an array of integers (Q-Values for the action set).
 unordered_map<int, array<double, 6>> qTable;
+
+// Training mode on = 1 or off = 0
+int trainingFlag;
+
+// Names of model files to load from and save to
+string loadFile, saveFile;
 
 // Probability of selecting a random action (epsilon-greedy policy)
 // Different probabilities can be set for the agent while looking for the gold and while carrying it
-int epsilonFindingGold = 50, epsilonCarryingGold = 50;
+int epsilonFindingGold, epsilonCarryingGold;
 
 // Bellman equation parameters
-int learningRate = 1;
-int discountFactor = 1;
+double learningRate;
+double discountFactor;
 
 // Number of episodes completed
 int episodeCount = 0;
@@ -24,17 +28,10 @@ int findingGoldEpisodeCount = 0;
 // Episode number when carrying gold finished training
 int carryingGoldEpisodeCount = 0;
 
-void Agent::saveModel() {
-    // Get the file name from an environment variable
-    const char* modelFileName = getenv("WW_SAVE_MODEL");
-
-    if (modelFileName == nullptr) {
-        cerr << "Set the WW_SAVE_MODEL environment variable to save the trained model to a file." << endl;
-        return;
-    }
-
+// Save the current agent model (Q-table) to a file
+void Agent::saveModel(string saveFile) {
     // Open the model file for writing
-    ofstream modelFile(modelFileName);
+    ofstream modelFile(saveFile);
     if (!modelFile) {
         cerr << "An error occurred while attempting to save the model (couldn't open file)." << endl;
         return;
@@ -57,19 +54,12 @@ void Agent::saveModel() {
     modelFile.close();
 }
 
-bool Agent::loadModel() {
-    // Get the file name from an environment variable
-    const char* modelFileName = getenv("WW_LOAD_MODEL");
-
-    if (modelFileName == nullptr) {
-        cerr << "Set the WW_LOAD_MODEL environment variable to load a model from a file." << endl;
-        return false;
-    }
-
+// Load a model (Q-table) for the agent from a file
+bool Agent::loadModel(string loadFile) {
     // Open the model file for reading
-    ifstream modelFile(modelFileName);
+    ifstream modelFile(loadFile);
     if (!modelFile) {
-        cerr << "An error occurred while attempting to load the model (couldn't open file: " << modelFileName << ")." << endl;
+        cerr << "An error occurred while attempting to load the model (couldn't open file: " << loadFile << ")." << endl;
         return false; // Exit with an error code
     }
 
@@ -139,7 +129,7 @@ int Agent::observedReward ()
 		// Log the number of episodes it took for epsilon to reach 0%
 		if (epsilonFindingGold == 0 && findingGoldEpisodeCount == 0)
 			findingGoldEpisodeCount = episodeCount;
-		return 10000;
+		return 100000;
 	}
 	// Tried to climb not at the entrance, wasted arrow, tried to grab nothing, or ran into a wall
 	if (previousAction == CLIMB || previousAction == SHOOT || previousAction == GRAB || currentPercept.Bump)
@@ -152,36 +142,58 @@ int Agent::observedReward ()
 // Agent constructor
 Agent::Agent ()
 {
-    // Get the training mode environment variable
-    const char* trainingMode = getenv("WW_TRAINING_MODE");
+    // Open the parameters file
+    ifstream parametersFile("parameters.txt");
 
-	// If it's set the agent applies a greedy policy (default = epsilon-greedy policy)
-    if (trainingMode == nullptr)
-        cerr << "Set the WW_TRAINING_MODE environment variable to disable training mode." << endl;
-    else {
+    if (parametersFile.is_open()) {
+        // Read values from the file line by line
+        parametersFile >> trainingFlag;          // Read integer
+        parametersFile >> loadFile;             // Read string
+        parametersFile >> saveFile;             // Read string
+        parametersFile >> epsilonFindingGold;    // Read integer
+        parametersFile >> epsilonCarryingGold;   // Read integer
+        parametersFile >> learningRate;          // Read float
+        parametersFile >> discountFactor;        // Read float
+
+        // Close the file
+        parametersFile.close();
+
+        // Display the values read from the file
+        cout << "trainingFlag: " << trainingFlag << endl;
+        cout << "loadModel: " << loadFile << endl;
+        cout << "saveModel: " << saveFile << endl;
+        cout << "epsilonFindingGold: " << epsilonFindingGold << endl;
+        cout << "epsilonCarryingGold: " << epsilonCarryingGold << endl;
+        cout << "learningRate: " << learningRate << endl;
+        cout << "discountFactor: " << discountFactor << endl;
+    }
+	else cerr << "Unable to open file parameters.txt" << endl;
+
+	// If the training flag was not set the agent applies a greedy policy
+    if (!trainingFlag) {
 		epsilonFindingGold = 0;
 		epsilonCarryingGold = 0;
 	}
 
 	// If an error occurs while loading the model, clear whatever was loaded
-	if (!loadModel())
+	if (!loadModel(loadFile))
 		qTable.clear();
 }
 
 // Agent destructor
 Agent::~Agent ()
 {
-	saveModel();
+	if (carryingGoldEpisodeCount) {
+		cout << "Finished gold finding training in " << findingGoldEpisodeCount << " episodes." << endl;
+		cout << "Finished gold carrying training in " << carryingGoldEpisodeCount << " episodes." << endl;
+	}
+	else cout << "Failed to train agent." << endl;
+	saveModel(saveFile);
 }
 
 // Values initialized each time the agent tries a world
 void Agent::Initialize ()
 {
-	if (carryingGoldEpisodeCount) {
-		cout << "Finished gold finding training in " << findingGoldEpisodeCount << " episodes." << endl;
-		cout << "Finished gold carrying training in " << carryingGoldEpisodeCount << " episodes." << endl;
-		exit(0);
-	}
 	numMoves = 0;
 	wumpusIsDead = false;
 	carryingGold = false;
