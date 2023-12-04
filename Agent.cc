@@ -121,18 +121,8 @@ int Agent::observedReward ()
 	// Killed the Wumpus
 	if (currentPercept.Scream)
 		return 10;
-	// Grabbed the gold
-	else if (previousAction == GRAB && previousPercept.Glitter) {
-		// Decrease epsilon by 1% every time the agent successfully exits with the gold
-		if (epsilonFindingGold > 0)
-			epsilonFindingGold -= 1;
-		// Log the number of episodes it took for epsilon to reach 0%
-		if (epsilonFindingGold == 0 && findingGoldEpisodeCount == 0)
-			findingGoldEpisodeCount = episodeCount;
-		return 100000;
-	}
 	// Tried to climb not at the entrance, wasted arrow, tried to grab nothing, or ran into a wall
-	if (previousAction == CLIMB || previousAction == SHOOT || previousAction == GRAB || currentPercept.Bump)
+	else if (previousAction == CLIMB || previousAction == SHOOT || previousAction == GRAB || currentPercept.Bump)
 		return -100;
 	// Moved to a different space or changed orientation
 	else
@@ -274,7 +264,7 @@ Action Agent::Process (Percept& percept)
 		updateLocation();
 	else if (previousAction == TURNLEFT || previousAction == TURNRIGHT)
 		updateOrientation();
-	else if (previousAction == GRAB && previousPercept.Glitter == true)
+	else if (previousAction == GRAB && previousPercept.Glitter)
 		carryingGold = true;
 	if (wumpusIsDead)
 		currentPercept.Stench = false;
@@ -286,7 +276,17 @@ Action Agent::Process (Percept& percept)
 		qTable[stateAsDecimal] = {0, 0, 0, 0, 0, 0};
 
 	reward = observedReward();
-	if (previousAction != CLIMB)
+	// Grabbed the gold
+	if (previousAction == GRAB && previousPercept.Glitter) {
+		qTable[previousStateAsDecimal][GRAB] = 100000;
+		// Decrease epsilon by 1% every time the agent successfully exits with the gold
+		if (epsilonFindingGold > 0)
+			epsilonFindingGold -= 1;
+		// Log the number of episodes it took for epsilon to reach 0%
+		if (epsilonFindingGold == 0 && findingGoldEpisodeCount == 0)
+			findingGoldEpisodeCount = episodeCount;
+	}
+	else if (previousAction != CLIMB)
 		qTable[previousStateAsDecimal][static_cast<int>(previousAction)] = bellmanEquation(previousStateAsDecimal, previousAction, reward, stateAsDecimal);
 
 	/* Generate random number between 1 and 100 */
@@ -295,8 +295,14 @@ Action Agent::Process (Percept& percept)
 	int epsilon = epsilonFindingGold;
 	if (carryingGold)
 		epsilon = epsilonCarryingGold;
+	// If the agent is standing on the gold, grab it
+	if (currentPercept.Glitter)
+		action = GRAB;
+	// If the agent is standing at the cave entrance with the gold, climb
+	else if (carryingGold && x == 0 && y == 0)
+		action = CLIMB;
 	/* If the value is less than epsilon select a random action */
-	if (epsilonGreedy <= epsilon)
+	else if (epsilonGreedy <= epsilon)
 		action = static_cast<Action>(rand() % 6);
 	/* Otherwise select the action based on the Q-table */
 	else
@@ -304,7 +310,7 @@ Action Agent::Process (Percept& percept)
 
 	previousStateAsDecimal = stateAsDecimal;
 	previousAction = action;
-	previousPercept = percept;
+	previousPercept = currentPercept;
 
 	numMoves++;
 	return action;
@@ -315,7 +321,7 @@ void Agent::GameOver (int score)
 {
 	episodeCount++;
 	// Escaped with the gold
-	if (previousAction == CLIMB && carryingGold) {
+	if (previousAction == CLIMB && carryingGold && numMoves < 999) {
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = 100000;
 		// Decrease epsilon by 1% every time the agent successfully exits with the gold
 		if (epsilonCarryingGold > 0)
@@ -325,7 +331,7 @@ void Agent::GameOver (int score)
 			carryingGoldEpisodeCount = episodeCount;
 	}
 	// Escaped without gold, fell into a pit or died to the Wumpus
-	else if (numMoves < 1000)
+	else if (numMoves < 999)
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = -100000;
 	cout << epsilonCarryingGold << " " <<  epsilonFindingGold << endl;
 }
