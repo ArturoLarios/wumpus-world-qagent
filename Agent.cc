@@ -281,7 +281,7 @@ Action Agent::Process (Percept& percept)
 		qTable[previousStateAsDecimal][GRAB] = 100000;
 		// Decrease epsilon by 1% every time the agent successfully exits with the gold
 		if (epsilonFindingGold > 0)
-			epsilonFindingGold -= 1;
+			epsilonFindingGold -= 5;
 		// Log the number of episodes it took for epsilon to reach 0%
 		if (epsilonFindingGold == 0 && findingGoldEpisodeCount == 0)
 			findingGoldEpisodeCount = episodeCount;
@@ -333,5 +333,7 @@ void Agent::GameOver (int score)
 	// Escaped without gold, fell into a pit or died to the Wumpus
 	else if (numMoves < 999)
 		qTable[stateAsDecimal][static_cast<int>(previousAction)] = -100000;
+	else
+		qTable[previousStateAsDecimal][static_cast<int>(previousAction)] = bellmanEquation(previousStateAsDecimal, previousAction, -10, stateAsDecimal);
 	cout << epsilonCarryingGold << " " <<  epsilonFindingGold << endl;
 }
