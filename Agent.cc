@@ -21,6 +21,8 @@ double discountFactor;
 
 // Number of episodes completed
 int episodeCount = 0;
+int converged = 0;
+int convergenceCount = 0;
 
 // Save the current agent model (Q-table) to a file
 void Agent::saveModel(string saveFile) {
@@ -140,14 +142,6 @@ Agent::Agent ()
 
         // Close the file
         parametersFile.close();
-
-        // Display the values read from the file
-        cout << "trainingFlag: " << trainingFlag << endl;
-        cout << "loadModel: " << loadFile << endl;
-        cout << "saveModel: " << saveFile << endl;
-        cout << "epsilon: " << epsilon << endl;
-        cout << "learningRate: " << learningRate << endl;
-        cout << "discountFactor: " << discountFactor << endl;
     }
 	else cerr << "Unable to open file parameters.txt" << endl;
 
@@ -163,6 +157,8 @@ Agent::Agent ()
 // Agent destructor
 Agent::~Agent ()
 {
+	if (trainingFlag)
+		cout << "Episodes to converge: " << convergenceCount << endl;
 	saveModel(saveFile);
 }
 
@@ -272,6 +268,10 @@ Action Agent::Process (Percept& percept)
 		// Decrease epsilon by 1% every time the agent successfully exits with the gold
 		if (epsilon > 0)
 			epsilon -= 1;
+		if (epsilon == 0 && !converged) {
+			convergenceCount = episodeCount;
+			converged = 1;
+		}
 	}
 	/* If the value is less than epsilon select a random action */
 	else if (epsilonGreedy <= epsilon) {
