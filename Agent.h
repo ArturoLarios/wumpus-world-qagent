@@ -12,6 +12,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <array>
+#include <stack>
 
 #include "Action.h"
 #include "Percept.h"
@@ -34,9 +35,12 @@ private:
 	bool wumpusIsDead;
 	bool carryingGold;
 
-	char state[10];
+	bitset<8> state;
 	int stateAsDecimal;
 	int previousStateAsDecimal;
+
+	stack<Action> pathToEntrance;
+	bool goingBackwards;
 public:
 	Agent ();
 	~Agent ();
