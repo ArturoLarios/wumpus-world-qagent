@@ -1,7 +1,6 @@
-1
+0
 model.txt
 model.txt
-50
 50
 1
 1
