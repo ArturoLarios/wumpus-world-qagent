@@ -4,7 +4,7 @@ The Wumpus World is a grid-based environment where an adventurer (the player or 
 
 ### Steps to Use:
 
-1. **[Download the Wumpus World Simulator](https://github.com/holderlb/wumpus-world-simulator):** 
+1. **[Download the Wumpus World Simulator](https://github.com/holderlb/wumpus-world-simulator).** 
 2. **Copy Repository Files:** Place the files from this repository into the folder of the Wumpus World Simulator.
 3. **Run an Already Trained Agent:** Execute "make" followed by "./wumpsim -world testworld.txt" on a UNIX system (or a system with 'make' and a C++ compiler installed).
 4. **Train an Agent:** Modify the 'parameters.txt' file. Replace 'testworld.txt' with your desired world. Add "-tries [# of episodes]" to the previous command to specify the number of training episodes.
