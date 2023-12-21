@@ -3,11 +3,8 @@
 #ifndef AGENT_H
 #define AGENT_H
 
-#include <cstdlib>
-#include <cstring>
 #include <string>
 #include <bitset>
-#include <limits>
 #include <fstream>
 #include <iostream>
 #include <unordered_map>

@@ -246,7 +246,7 @@ Action Agent::Process (Percept& percept)
 	if (previousAction != CLIMB)
 		qTable[previousStateAsDecimal][static_cast<int>(previousAction)] = bellmanEquation(previousStateAsDecimal, previousAction, reward, stateAsDecimal);
 
-	/* Generate random number between 1 and 100 */
+	// Generate random number between 1 and 100
 	epsilonGreedy = rand() % 100 + 1;
 	// If the agent is carrying the gold, take the path in reverse
 	if (carryingGold) {
@@ -273,15 +273,16 @@ Action Agent::Process (Percept& percept)
 			converged = 1;
 		}
 	}
-	/* If the value is less than epsilon select a random action */
+	// If the value is less than epsilon select a random action
 	else if (epsilonGreedy <= epsilon) {
 		action = static_cast<Action>(rand() % 4);
 		action = (static_cast<int>(action) == 3) ? static_cast<Action>(4):action;
 	}
-	/* Otherwise select the action based on the Q-table */
+	// Otherwise select the action based on the Q-table
 	else
 		action = static_cast<Action>(maxQIndex(stateAsDecimal));
 
+	// Add any movement action to a stack
 	if (action == GOFORWARD)
 		pathToEntrance.push(GOFORWARD);
 	else if (action == TURNLEFT)
